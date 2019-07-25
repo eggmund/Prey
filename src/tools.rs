@@ -6,11 +6,11 @@ use rand::{rngs::ThreadRng, Rng};
 // For boids
 pub fn rand_vector2(
     rand_thread: &mut ThreadRng,
-    min_mag: f64,
-    max_mag: f64,
-    min_angle: f64,
-    max_angle: f64,
-) -> Vector2<f64> {
+    min_mag: f32,
+    max_mag: f32,
+    min_angle: f32,
+    max_angle: f32,
+) -> Vector2<f32> {
     let mag = rand_thread.gen_range(min_mag, max_mag);
     let angle = rand_thread.gen_range(min_angle, max_angle);
 
@@ -18,37 +18,37 @@ pub fn rand_vector2(
 }
 
 #[inline]
-pub fn get_components(mag: f64, angle: f64) -> Vector2<f64> {
+pub fn get_components(mag: f32, angle: f32) -> Vector2<f32> {
     Vector2::new(mag * angle.cos(), mag * angle.sin())
 }
 
 #[inline]
-pub fn get_angle(vec: &Vector2<f64>) -> f64 {
+pub fn get_angle(vec: &Vector2<f32>) -> f32 {
     vec.y.atan2(vec.x)
 }
 
 #[inline]
-pub fn get_magnitude(vec: &Vector2<f64>) -> f64 {
+pub fn get_magnitude(vec: &Vector2<f32>) -> f32 {
     get_magnitude_squared(vec).sqrt()
 }
 
 #[inline]
-pub fn get_magnitude_squared(vec: &Vector2<f64>) -> f64 {
+pub fn get_magnitude_squared(vec: &Vector2<f32>) -> f32 {
     vec.x.powi(2) + vec.y.powi(2)
 }
 
 #[inline]
 pub fn point_is_in_radius(
-    center_pos: &Point2<f64>,
-    point: &Point2<f64>,
-    radius_squared: f64,
+    center_pos: &Point2<f32>,
+    point: &Point2<f32>,
+    radius_squared: f32,
 ) -> bool {
     let dist_vec = *point - *center_pos;
     get_magnitude_squared(&dist_vec) <= radius_squared
 }
 
 #[inline]
-pub fn limit_vector_mag(vec: Vector2<f64>, max_squared: f64) -> Vector2<f64> {
+pub fn limit_vector_mag(vec: Vector2<f32>, max_squared: f32) -> Vector2<f32> {
     let mag_sqr = get_magnitude_squared(&vec);
 
     if mag_sqr >= max_squared {
@@ -60,13 +60,13 @@ pub fn limit_vector_mag(vec: Vector2<f64>, max_squared: f64) -> Vector2<f64> {
 }
 
 #[inline]
-pub fn set_vector_mag(vec: Vector2<f64>, mag: f64) -> Vector2<f64> {
+pub fn set_vector_mag(vec: Vector2<f32>, mag: f32) -> Vector2<f32> {
     let angle = get_angle(&vec);
     get_components(mag, angle)
 }
 
 #[inline]
-pub fn clamp_vector_mag(vec: Vector2<f64>, min: f64, max: f64) -> Vector2<f64> {
+pub fn clamp_vector_mag(vec: Vector2<f32>, min: f32, max: f32) -> Vector2<f32> {
     let mag = get_magnitude_squared(&vec).sqrt();
 
     if mag >= max {

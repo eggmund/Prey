@@ -1,7 +1,7 @@
 mod boid;
 mod tools;
 
-use ggez::event;
+use ggez::event::{self, KeyCode, KeyMods};
 use ggez::graphics;
 use ggez::nalgebra as na;
 use ggez::timer;
@@ -14,24 +14,28 @@ use std::cell::RefCell;
 use std::f64::consts::PI;
 
 use crate::boid::{
-    Boid, BoidType, BOID_MAX_SPEED, BOID_MIN_SPEED, BOID_SENSORY_RADIUS_SQR, BOID_SIZE, BOUNDING_RADIUS_SQR
+    Boid, BoidType, BOID_MAX_SPEED, BOID_MIN_SPEED, BOID_SENSORY_RADIUS_SQR, BOID_SIZE,
+    BOUNDING_RADIUS_SQR,
 };
 
-const TWO_PI: f64 = PI * 2.0;
-const ALIGNMENT_MULT: f64 = 5.0;
-const COHESION_MULT: f64 = 10.0;
-const SEPARATION_MULT: f64 = 200.0;
+const TWO_PI: f32 = (PI * 2.0) as f32;
+const ALIGNMENT_MULT: f32 = 5.0;
+const COHESION_MULT: f32 = 30.0;
 
-const PREY_ESCAPE_MULT: f64 = -550.0;
-const PREDATOR_CHASE_MULT: f64 = 1750.0;
+const SEPARATION_MULT: f32 = 130.0;
+const PREDATOR_SEPERATION_MULT: f32 = 500.0;
 
-const SCREEN_DIMS: [f32; 2] = [800.0, 600.0];
+const PREY_ESCAPE_MULT: f32 = 550.0;
+const PREDATOR_CHASE_MULT: f32 = 1050.0;
 
-const N: usize = 512;
+const SCREEN_DIMS: [f32; 2] = [1000.0, 800.0];
+
+const N: usize = 256;
 
 struct MainState {
     boids: Vec<RefCell<Boid>>,
     spawn_rand_thread: ThreadRng,
+    show_sensory_radii: bool,
 }
 
 impl MainState {
@@ -39,9 +43,10 @@ impl MainState {
         let mut s = MainState {
             boids: Vec::with_capacity(N),
             spawn_rand_thread: rand::thread_rng(),
+            show_sensory_radii: false,
         };
 
-        for _ in 0..N {
+        for _ in 0..N - 1 {
             let rand_vel = tools::rand_vector2(
                 &mut s.spawn_rand_thread,
                 BOID_MIN_SPEED,
@@ -51,8 +56,8 @@ impl MainState {
             );
 
             let rand_pos = Point2::new(
-                s.spawn_rand_thread.gen_range(0.0, 800.0),
-                s.spawn_rand_thread.gen_range(0.0, 600.0),
+                s.spawn_rand_thread.gen_range(0.0, SCREEN_DIMS[0]),
+                s.spawn_rand_thread.gen_range(0.0, SCREEN_DIMS[1]),
             );
 
             s.boids
@@ -61,7 +66,7 @@ impl MainState {
 
         s.boids.push(RefCell::new(Boid::new(
             BoidType::Predator,
-            Point2::new(400.0, 300.0),
+            Point2::new(SCREEN_DIMS[0] / 2.0, SCREEN_DIMS[1] / 2.0),
             Vector2::new(0.0, 0.0),
         )));
 
@@ -71,17 +76,17 @@ impl MainState {
     fn teleport_edges(&mut self) {
         for boid in self.boids.iter_mut() {
             let mut boid = boid.borrow_mut();
-            if boid.position.x <= -BOID_SIZE[0] as f64 {
-                boid.position.x = (SCREEN_DIMS[0] + BOID_SIZE[0] / 2.0) as f64;
+            if boid.position.x <= -BOID_SIZE[0] {
+                boid.position.x = (SCREEN_DIMS[0] + BOID_SIZE[0] / 2.0);
             }
-            if boid.position.x > (SCREEN_DIMS[0] + BOID_SIZE[0] / 2.0) as f64 {
+            if boid.position.x > (SCREEN_DIMS[0] + BOID_SIZE[0] / 2.0) {
                 boid.position.x = 0.0;
             }
 
-            if boid.position.y <= -BOID_SIZE[0] as f64 {
-                boid.position.y = (SCREEN_DIMS[1] + BOID_SIZE[0] / 2.0) as f64;
+            if boid.position.y <= -BOID_SIZE[0] {
+                boid.position.y = (SCREEN_DIMS[1] + BOID_SIZE[0] / 2.0);
             }
-            if boid.position.y > (SCREEN_DIMS[1] + BOID_SIZE[0] / 2.0) as f64 {
+            if boid.position.y > (SCREEN_DIMS[1] + BOID_SIZE[0] / 2.0) {
                 boid.position.y = 0.0;
             }
         }
@@ -90,24 +95,24 @@ impl MainState {
     fn bounce_edges(&mut self) {
         for boid in self.boids.iter_mut() {
             let mut boid = boid.borrow_mut();
-            if boid.position.x <= BOID_SIZE[0] as f64
-                || boid.position.x > (SCREEN_DIMS[0] - BOID_SIZE[0] / 2.0) as f64
+            if boid.position.x <= BOID_SIZE[0]
+                || boid.position.x > (SCREEN_DIMS[0] - BOID_SIZE[0] / 2.0)
             {
                 boid.velocity.x = -boid.velocity.x;
 
-                if boid.position.x <= BOID_SIZE[0] as f64 {
+                if boid.position.x <= BOID_SIZE[0] {
                     boid.position.x += 1.0; // Move away from edge
                 } else {
                     boid.position.x -= 1.0;
                 }
             }
 
-            if boid.position.y <= BOID_SIZE[0] as f64
-                || boid.position.y > (SCREEN_DIMS[1] - BOID_SIZE[0] / 2.0) as f64
+            if boid.position.y <= BOID_SIZE[0]
+                || boid.position.y > (SCREEN_DIMS[1] - BOID_SIZE[0] / 2.0)
             {
                 boid.velocity.y = -boid.velocity.y;
 
-                if boid.position.y <= BOID_SIZE[1] as f64 {
+                if boid.position.y <= BOID_SIZE[1] {
                     boid.position.y += 1.0; // Move away from edge
                 } else {
                     boid.position.y -= 1.0;
@@ -117,7 +122,7 @@ impl MainState {
     }
 
     #[inline]
-    fn check_boids_colliding(pos1: &Point2<f64>, pos2: &Point2<f64>) -> bool {
+    fn check_boids_colliding(pos1: &Point2<f32>, pos2: &Point2<f32>) -> bool {
         let dist = *pos2 - *pos1;
         tools::get_magnitude_squared(&dist) < BOUNDING_RADIUS_SQR
     }
@@ -125,9 +130,9 @@ impl MainState {
 
 impl event::EventHandler for MainState {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
-        let dt = timer::duration_to_f64(timer::delta(ctx));
+        let dt = timer::duration_to_f64(timer::delta(ctx)) as f32;
 
-        self.bounce_edges();
+        self.teleport_edges();
 
         for i in 0..self.boids.len() {
             let mut current = self.boids[i].borrow_mut();
@@ -142,7 +147,9 @@ impl event::EventHandler for MainState {
                 if i != j {
                     let other = self.boids[j].borrow();
 
-                    if other.b_type == BoidType::Predator && Self::check_boids_colliding(&current.position, &other.position) {
+                    if other.b_type == BoidType::Predator
+                        && Self::check_boids_colliding(&current.position, &other.position)
+                    {
                         current.b_type = BoidType::Predator;
                     }
 
@@ -159,13 +166,17 @@ impl event::EventHandler for MainState {
                         diff_vector /= distance_to_other_sqrd.sqrt(); // Normalise
 
                         if current.b_type == other.b_type {
-                            current.acceleration -= diff_vector * SEPARATION_MULT;
+                            current.acceleration -= diff_vector
+                                * match current.b_type {
+                                    BoidType::Predator => PREDATOR_SEPERATION_MULT,
+                                    _ => SEPARATION_MULT,
+                                };
                         } else if current.b_type == BoidType::Predator
                             && other.b_type == BoidType::Prey
                         {
                             current.acceleration += diff_vector * PREDATOR_CHASE_MULT; // Add to acceleration
                         } else {
-                            current.acceleration += diff_vector * PREY_ESCAPE_MULT; // Add to acceleration
+                            current.acceleration -= diff_vector * PREY_ESCAPE_MULT;
                         }
 
                         total_in_sensory_radius += 1;
@@ -174,8 +185,8 @@ impl event::EventHandler for MainState {
             }
 
             if total_in_sensory_radius > 0 {
-                let desired_vel = total_vel / total_in_sensory_radius as f64;
-                let desired_pos = total_pos / total_in_sensory_radius as f64;
+                let desired_vel = total_vel / total_in_sensory_radius as f32;
+                let desired_pos = total_pos / total_in_sensory_radius as f32;
 
                 // Alignment
                 current.acceleration += (desired_vel - current.velocity) * ALIGNMENT_MULT;
@@ -195,16 +206,35 @@ impl event::EventHandler for MainState {
         graphics::clear(ctx, [0.0, 0.0, 0.0, 1.0].into());
 
         for boid in self.boids.iter() {
-            boid.borrow().draw(ctx)?;
+            boid.borrow().draw(ctx, self.show_sensory_radii)?;
         }
 
         graphics::present(ctx)?;
         Ok(())
     }
+
+    fn key_down_event(
+        &mut self,
+        ctx: &mut Context,
+        keycode: KeyCode,
+        _keymods: KeyMods,
+        _repeat: bool,
+    ) {
+        match keycode {
+            KeyCode::S => {
+                self.show_sensory_radii = !self.show_sensory_radii;
+            }
+            _ => (),
+        }
+    }
 }
 
 pub fn main() -> GameResult {
-    let cb = ggez::ContextBuilder::new("Prey", "ggez");
+    use ggez::conf::WindowMode;
+
+    let cb = ggez::ContextBuilder::new("Prey", "ggez")
+        .window_mode(WindowMode::default().dimensions(SCREEN_DIMS[0], SCREEN_DIMS[1]));
+
     let (ctx, event_loop) = &mut cb.build()?;
     let state = &mut MainState::new(ctx)?;
     event::run(ctx, event_loop, state)
